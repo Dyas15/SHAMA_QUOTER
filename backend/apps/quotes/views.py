@@ -178,7 +178,7 @@ class QuoteResultViewSet(viewsets.ReadOnlyModelViewSet):
 class ProposalViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff or user.groups.filter(name__in=['Manager', 'Admin']).exists():
+        if user.is_staff or user.groups.filter(name__in=['Manager', 'Admin', 'Auditor']).exists():
             return Proposal.objects.all()
         return Proposal.objects.filter(quote_request__user=user)
 
