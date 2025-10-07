@@ -1,5 +1,8 @@
 
-from apps.quotes.models import QuoteRequest, QuoteResult, Proposal, RiskCity, SystemParameter, SpecialCondition
+from apps.quotes.models import (
+    QuoteRequest, QuoteResult, Proposal, RiskCity,
+    SystemParameter, SpecialCondition, RiskMultiplierConfiguration
+)
 from apps.insurers.models import InsurerBusinessRule, Insurer, MerchandiseType
 from decimal import Decimal
 import logging
@@ -44,12 +47,19 @@ def calculate_premium_for_insurer(quote_request: QuoteRequest, insurer: Insurer)
         rc_dc_rate = rule.rc_dc_rate
         
         # Aplicar fatores de agravo/desconto baseados no nível de risco da mercadoria
-        if merchandise_type.risk_level == 'HIGH':
-            rctr_c_rate *= rule.high_risk_multiplier
-            rc_dc_rate *= rule.high_risk_multiplier
-        elif merchandise_type.risk_level == 'EXTREME':
-            rctr_c_rate *= (rule.high_risk_multiplier * Decimal('1.5')) # Exemplo de agravo maior
-            rc_dc_rate *= (rule.high_risk_multiplier * Decimal('1.5'))
+        try:
+            risk_multiplier_config = RiskMultiplierConfiguration.objects.get(
+                risk_level=merchandise_type.risk_level,
+                is_active=True
+            )
+            multiplier = risk_multiplier_config.multiplier
+        except RiskMultiplierConfiguration.DoesNotExist:
+            logger.warning(f"Configuração de multiplicador não encontrada para {merchandise_type.risk_level}. Usando multiplicador padrão.")
+            multiplier = rule.high_risk_multiplier if merchandise_type.risk_level in ['HIGH', 'EXTREME'] else Decimal('1.0')
+
+        if merchandise_type.risk_level != 'LOW':
+            rctr_c_rate *= multiplier
+            rc_dc_rate *= multiplier
 
         # Aplicar desconto por volume, se aplicável
         if quote_request.monthly_revenue >= rule.volume_discount_threshold and rule.volume_discount_threshold > 0:

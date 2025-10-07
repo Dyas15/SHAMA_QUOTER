@@ -55,10 +55,25 @@ def generate_proposal_pdf(proposal, pdf_path):
     """
     Gera um PDF dinâmico para a proposta de seguro
     """
+    from apps.quotes.models import CompanyConfiguration, FranchiseConfiguration, ProposalConfiguration
+
+    company_config = CompanyConfiguration.objects.filter(is_active=True).first()
+    if not company_config:
+        company_config = CompanyConfiguration.objects.create()
+
+    proposal_config = ProposalConfiguration.objects.filter(is_active=True).first()
+    if not proposal_config:
+        proposal_config = ProposalConfiguration.objects.create()
+
+    franchise_configs = {
+        'RCTR_C': FranchiseConfiguration.objects.filter(coverage_type__in=['RCTR_C', 'ALL'], is_active=True).first(),
+        'RC_DC': FranchiseConfiguration.objects.filter(coverage_type__in=['RC_DC', 'ALL'], is_active=True).first()
+    }
+
     doc = SimpleDocTemplate(pdf_path, pagesize=A4)
     story = []
     styles = getSampleStyleSheet()
-    
+
     # Estilos customizados
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -68,7 +83,7 @@ def generate_proposal_pdf(proposal, pdf_path):
         alignment=TA_CENTER,
         textColor=colors.darkblue
     )
-    
+
     subtitle_style = ParagraphStyle(
         'CustomSubtitle',
         parent=styles['Heading2'],
@@ -76,7 +91,7 @@ def generate_proposal_pdf(proposal, pdf_path):
         spaceAfter=20,
         textColor=colors.darkblue
     )
-    
+
     normal_style = ParagraphStyle(
         'CustomNormal',
         parent=styles['Normal'],
@@ -85,7 +100,7 @@ def generate_proposal_pdf(proposal, pdf_path):
     )
 
     # Cabeçalho
-    story.append(Paragraph("SHAMAH SEGUROS", title_style))
+    story.append(Paragraph(company_config.company_name, title_style))
     story.append(Paragraph("Proposta de Seguro de Transporte de Carga", subtitle_style))
     story.append(Spacer(1, 20))
 
@@ -167,11 +182,14 @@ def generate_proposal_pdf(proposal, pdf_path):
 
     # Franquias
     story.append(Paragraph("FRANQUIAS", subtitle_style))
-    
+
+    rctr_c_franchise_text = franchise_configs['RCTR_C'].get_formatted_text() if franchise_configs['RCTR_C'] else '10% com mínimo de R$ 1.000,00'
+    rc_dc_franchise_text = franchise_configs['RC_DC'].get_formatted_text() if franchise_configs['RC_DC'] else '10% com mínimo de R$ 1.000,00'
+
     franchise_data = [
         ['Tipo de Franquia:', 'Valor/Percentual'],
-        ['RCTR-C:', '10% com mínimo de R$ 1.000,00'],
-        ['RC-DC:', '10% com mínimo de R$ 1.000,00']
+        ['RCTR-C:', rctr_c_franchise_text],
+        ['RC-DC:', rc_dc_franchise_text]
     ]
     
     franchise_table = Table(franchise_data, colWidths=[3*inch, 3*inch])
@@ -192,11 +210,11 @@ def generate_proposal_pdf(proposal, pdf_path):
 
     # Prêmio do Seguro
     story.append(Paragraph("PRÊMIO DO SEGURO", subtitle_style))
-    
+
     premium_data = [
         ['Prêmio Total Mensal:', f"R$ {float(proposal.total_premium):,.2f}" if proposal.total_premium else 'N/A'],
-        ['Forma de Pagamento:', 'Mensal'],
-        ['Vigência:', '12 meses']
+        ['Forma de Pagamento:', proposal_config.payment_frequency],
+        ['Vigência:', f'{proposal_config.policy_duration_months} meses']
     ]
     
     premium_table = Table(premium_data, colWidths=[2*inch, 4*inch])
@@ -216,12 +234,14 @@ def generate_proposal_pdf(proposal, pdf_path):
 
     # Validade da Proposta
     story.append(Paragraph("VALIDADE DA PROPOSTA", subtitle_style))
-    story.append(Paragraph("Esta proposta tem validade de 30 (trinta) dias a partir da data de emissão.", normal_style))
+    validity_text = f"Esta proposta tem validade de {proposal_config.validity_days} dias a partir da data de emissão."
+    story.append(Paragraph(validity_text, normal_style))
     story.append(Spacer(1, 20))
 
     # Rodapé
-    story.append(Paragraph("SHAMAH SEGUROS", normal_style))
-    story.append(Paragraph("Contato: (11) 1234-5678 | email@shamahseguros.com.br", normal_style))
+    story.append(Paragraph(company_config.company_name, normal_style))
+    contact_info = f"Contato: {company_config.contact_phone} | {company_config.contact_email}"
+    story.append(Paragraph(contact_info, normal_style))
     story.append(Paragraph(f"Data de Emissão: {datetime.now().strftime('%d/%m/%Y')}", normal_style))
 
     # Construir o PDF

@@ -135,8 +135,100 @@ class QuoteItem(models.Model):
     item_description = models.CharField(max_length=255)
     item_value = models.DecimalField(max_digits=12, decimal_places=2)
     item_quantity = models.IntegerField(default=1)
-    # Outros campos relevantes para um item de cotação
 
     def __str__(self):
         return f'{self.item_description} ({self.item_quantity}) for Quote {self.quote_request.id}'
+
+
+class EmailTemplate(models.Model):
+    TEMPLATE_TYPE_CHOICES = [
+        ('APPROVAL', 'Aprovação de Proposta'),
+        ('REJECTION', 'Rejeição de Proposta'),
+        ('QUOTATION_REQUEST', 'Solicitação de Cotação'),
+        ('CUSTOM', 'Personalizado'),
+    ]
+
+    template_type = models.CharField(max_length=50, choices=TEMPLATE_TYPE_CHOICES, unique=True)
+    subject = models.CharField(max_length=500)
+    body_html = models.TextField(help_text="Template HTML com variáveis {{variable_name}}")
+    body_text = models.TextField(blank=True, help_text="Versão texto plano (opcional)")
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.get_template_type_display()}"
+
+
+class CompanyConfiguration(models.Model):
+    company_name = models.CharField(max_length=255, default="SHAMAH SEGUROS")
+    contact_phone = models.CharField(max_length=50, default="(11) 1234-5678")
+    contact_email = models.EmailField(default="contato@shamahseguros.com.br")
+    address = models.TextField(blank=True)
+    website = models.URLField(blank=True)
+    logo_url = models.URLField(blank=True, help_text="URL do logo da empresa")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Configuração da Empresa"
+        verbose_name_plural = "Configurações da Empresa"
+
+    def __str__(self):
+        return self.company_name
+
+
+class FranchiseConfiguration(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, help_text="Percentual da franquia (%)")
+    minimum_value = models.DecimalField(max_digits=12, decimal_places=2, help_text="Valor mínimo da franquia")
+    coverage_type = models.CharField(max_length=50, choices=[
+        ('RCTR_C', 'RCTR-C'),
+        ('RC_DC', 'RC-DC'),
+        ('ALL', 'Todas as Coberturas')
+    ], default='ALL')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Configuração de Franquia"
+        verbose_name_plural = "Configurações de Franquias"
+
+    def __str__(self):
+        return f"{self.name} - {self.percentage}% min. R$ {self.minimum_value}"
+
+    def get_formatted_text(self):
+        return f"{self.percentage}% com mínimo de R$ {self.minimum_value:,.2f}"
+
+
+class ProposalConfiguration(models.Model):
+    validity_days = models.IntegerField(default=30, help_text="Dias de validade da proposta")
+    payment_frequency = models.CharField(max_length=50, default="Mensal")
+    policy_duration_months = models.IntegerField(default=12, help_text="Duração da apólice em meses")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Configuração de Proposta"
+        verbose_name_plural = "Configurações de Propostas"
+
+    def __str__(self):
+        return f"Validade: {self.validity_days} dias | Pagamento: {self.payment_frequency}"
+
+
+class RiskMultiplierConfiguration(models.Model):
+    RISK_LEVEL_CHOICES = [
+        ('LOW', 'Baixo'),
+        ('MODERATE', 'Moderado'),
+        ('HIGH', 'Alto'),
+        ('EXTREME', 'Extremo'),
+    ]
+
+    risk_level = models.CharField(max_length=20, choices=RISK_LEVEL_CHOICES, unique=True)
+    multiplier = models.DecimalField(max_digits=5, decimal_places=2, default=1.0,
+                                     help_text="Multiplicador de taxa para este nível de risco")
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Configuração de Multiplicador de Risco"
+        verbose_name_plural = "Configurações de Multiplicadores de Risco"
+
+    def __str__(self):
+        return f"{self.get_risk_level_display()}: {self.multiplier}x"
 

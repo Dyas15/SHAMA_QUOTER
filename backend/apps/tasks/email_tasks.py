@@ -7,27 +7,48 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_rejection_email_task(proposal_id):
-    # Importar o modelo aqui dentro da função, para garantir que o registro de apps já esteja carregado.
-    from apps.quotes.models import Proposal
+    from apps.quotes.models import Proposal, EmailTemplate, CompanyConfiguration
+    from django.template import Template, Context
+
     try:
         proposal = Proposal.objects.get(id=proposal_id)
-        
-        # Lógica para enviar o e-mail de rejeição
-        subject = f"Atualização sobre sua Proposta de Seguro - {proposal.quote_request.client_name}"
-        message = f"""
-        Prezado(a) {proposal.quote_request.client_name},
 
-        Gostaríamos de informar que sua proposta de seguro, com base na cotação realizada em {proposal.proposal_date.strftime("%d/%m/%Y")}, foi analisada e, no momento, não poderemos prosseguir com a emissão da apólice nos termos solicitados.
+        email_template = EmailTemplate.objects.filter(template_type='REJECTION', is_active=True).first()
 
-        Agradecemos o seu interesse em nossos serviços e permanecemos à disposição para futuras cotações.
+        if not email_template:
+            logger.warning("Template de e-mail de rejeição não encontrado. Usando template padrão.")
+            email_template = EmailTemplate.objects.create(
+                template_type='REJECTION',
+                subject='Atualização sobre sua Proposta de Seguro - {{client_name}}',
+                body_html='''
+                <p>Prezado(a) {{client_name}},</p>
+                <p>Gostaríamos de informar que sua proposta de seguro, com base na cotação realizada em {{proposal_date}},
+                foi analisada e, no momento, não poderemos prosseguir com a emissão da apólice nos termos solicitados.</p>
+                <p>Agradecemos o seu interesse em nossos serviços e permanecemos à disposição para futuras cotações.</p>
+                <p>Atenciosamente,<br>Equipe {{company_name}}</p>
+                ''',
+                is_active=True
+            )
 
-        Atenciosamente,
-        Equipe Shamah Seguros
-        """
+        company_config = CompanyConfiguration.objects.filter(is_active=True).first()
+        company_name = company_config.company_name if company_config else "Shamah Seguros"
+
+        context = Context({
+            'client_name': proposal.quote_request.client_name,
+            'proposal_date': proposal.proposal_date.strftime("%d/%m/%Y"),
+            'company_name': company_name
+        })
+
+        subject_template = Template(email_template.subject)
+        body_template = Template(email_template.body_html)
+
+        subject = subject_template.render(context)
+        message = body_template.render(context)
+
         from_email = settings.DEFAULT_FROM_EMAIL
-        recipient_list = [proposal.quote_request.user.email]  # Supondo que o usuário que criou a cotação é o destinatário
+        recipient_list = [proposal.quote_request.user.email]
 
-        send_mail(subject, message, from_email, recipient_list)
+        send_mail(subject, message, from_email, recipient_list, html_message=message)
 
         proposal.status = "REJECTED"
         proposal.save()
@@ -38,7 +59,6 @@ def send_rejection_email_task(proposal_id):
         return False
     except Exception as e:
         logger.error(f"Erro ao enviar e-mail de rejeição para a proposta {proposal_id}: {e}")
-        # Reverte o status para PENDING em caso de falha no envio do e-mail
         proposal.status = "PENDING"
         proposal.save()
         return False
@@ -49,8 +69,8 @@ def send_rejection_email_task(proposal_id):
 
 @shared_task
 def send_approval_email_task(proposal_id, pdf_file_path):
-    from apps.quotes.models import Proposal
-    from django.template.loader import render_to_string
+    from apps.quotes.models import Proposal, EmailTemplate, CompanyConfiguration
+    from django.template import Template, Context
     from django.core.mail import EmailMessage
     from django.conf import settings
     import os
@@ -58,18 +78,40 @@ def send_approval_email_task(proposal_id, pdf_file_path):
     try:
         proposal = Proposal.objects.get(id=proposal_id)
 
-        # Renderizar o corpo do e-mail a partir de um template (a ser criado)
-        # Por enquanto, um template simples em string
-        email_body = render_to_string(
-            'emails/proposal_approved.html',  # Caminho para o template HTML
-            {
-                'client_name': proposal.quote_request.client_name,
-                'proposal_date': proposal.proposal_date.strftime("%d/%m/%Y"),
-                'total_premium': f"R$ {float(proposal.total_premium):,.2f}"
-            }
-        )
+        email_template = EmailTemplate.objects.filter(template_type='APPROVAL', is_active=True).first()
 
-        subject = f"Sua Proposta de Seguro foi Aprovada! - {proposal.quote_request.client_name}"
+        if not email_template:
+            logger.warning("Template de e-mail de aprovação não encontrado. Usando template padrão.")
+            email_template = EmailTemplate.objects.create(
+                template_type='APPROVAL',
+                subject='Sua Proposta de Seguro foi Aprovada! - {{client_name}}',
+                body_html='''
+                <p>Prezado(a) {{client_name}},</p>
+                <p>Temos o prazer de informar que sua proposta de seguro, com base na cotação realizada em {{proposal_date}}, foi <strong>APROVADA</strong>!</p>
+                <p>O valor do prêmio total mensal é de <strong>{{total_premium}}</strong>.</p>
+                <p>O documento da sua proposta aprovada está anexado a este e-mail para sua referência.</p>
+                <p>Agradecemos a confiança em nossos serviços.</p>
+                <p>Atenciosamente,<br><strong>Equipe {{company_name}}</strong></p>
+                ''',
+                is_active=True
+            )
+
+        company_config = CompanyConfiguration.objects.filter(is_active=True).first()
+        company_name = company_config.company_name if company_config else "Shamah Seguros"
+
+        context = Context({
+            'client_name': proposal.quote_request.client_name,
+            'proposal_date': proposal.proposal_date.strftime("%d/%m/%Y"),
+            'total_premium': f"R$ {float(proposal.total_premium):,.2f}",
+            'company_name': company_name
+        })
+
+        subject_template = Template(email_template.subject)
+        body_template = Template(email_template.body_html)
+
+        subject = subject_template.render(context)
+        email_body = body_template.render(context)
+
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [proposal.quote_request.user.email]
 
@@ -79,9 +121,8 @@ def send_approval_email_task(proposal_id, pdf_file_path):
             from_email,
             recipient_list
         )
-        email.content_subtype = "html"  # Define o tipo de conteúdo como HTML
+        email.content_subtype = "html"
 
-        # Anexar o PDF
         if os.path.exists(pdf_file_path):
             email.attach_file(pdf_file_path)
         else:
