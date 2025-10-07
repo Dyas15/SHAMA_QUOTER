@@ -1,16 +1,16 @@
 import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / \'subdir\'.
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-super-secret-key-for-dev-only")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dshauidhquwhdashDUIhuihUIDHuihdauiHDUIHdh78AGHD79gad6GAD6gd5FAD78fgD*F5¨FDa58¨dfASDASDYaSYDASDYHasD")
 
-# SECURITY WARNING: don\'t run with debug turned on in production!
+# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = []
@@ -30,11 +30,13 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "rest_framework_simplejwt", # Added for JWT authentication
     "corsheaders",
+    "django_redis", # Adicionado para caching com Redis
     # Local apps
     "apps.users",
     "apps.quotes",
     "apps.insurers",
     "apps.audits",
+    "apps.tasks", # Adicionado para que o Celery possa descobrir as tasks
 ]
 
 MIDDLEWARE = [
@@ -145,27 +147,44 @@ CACHES = {
 }
 
 # Logging
-# Logging
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        # Um formatador simples para desenvolvimento, mais fácil de ler que JSON
         "verbose": {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
+        },
+        "json": {
+            "format": "{ \"level\": \"%(levelname)s\", \"time\": \"%(asctime)s\", \"module\": \"%(module)s\", \"message\": \"%(message)s\" }",
+            "style": "%",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose", # Usando o formatador simples
-        }
+            "formatter": "verbose",
+        },
+        "json_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+        },
     },
     "root": {
-        # O logger 'root' captura logs de todas as fontes (django, apps, etc.)
         "handlers": ["console"],
         "level": "INFO",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["json_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "apps": {
+            "handlers": ["json_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 
@@ -218,3 +237,16 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
     "TOKEN_OBTAIN_SERIALIZER": "apps.users.serializers.CustomTokenObtainPairSerializer",
 }
+
+# Email settings for sending emails
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' # Use console for development
+DEFAULT_FROM_EMAIL = 'webmaster@localhost'
+
+# Media files (for PDFs)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# CORS settings
+CORS_ALLOW_ALL_ORIGINS = True
+
+

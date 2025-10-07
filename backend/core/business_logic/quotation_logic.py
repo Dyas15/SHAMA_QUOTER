@@ -1,5 +1,6 @@
-from apps.quotes.models import QuoteRequest, QuoteResult, Proposal
-from apps.insurers.models import InsurerBusinessRule, Insurer
+
+from apps.quotes.models import QuoteRequest, QuoteResult, Proposal, RiskCity, SystemParameter, SpecialCondition
+from apps.insurers.models import InsurerBusinessRule, Insurer, MerchandiseType
 from decimal import Decimal
 import logging
 
@@ -13,7 +14,7 @@ def calculate_premium(quote_request: QuoteRequest) -> list:
     results = []
     
     # Buscar todas as seguradoras ativas
-    insurers = Insurer.objects.all()
+    insurers = Insurer.objects.filter(is_active=True)
     
     for insurer in insurers:
         try:
@@ -31,33 +32,42 @@ def calculate_premium_for_insurer(quote_request: QuoteRequest, insurer: Insurer)
     Calcula o prêmio para uma seguradora específica
     """
     try:
-        # Buscar regras de negócio para esta seguradora e tipo de mercadoria
+        merchandise_type = MerchandiseType.objects.get(name=quote_request.cargo_type)
         rule = InsurerBusinessRule.objects.get(
             insurer=insurer,
-            merchandise_type__name=quote_request.cargo_type
+            merchandise_type=merchandise_type,
+            is_active=True
         )
         
-        # Taxas base
-        rctr_c_rate = rule.rctr_c_rate if hasattr(rule, 'rctr_c_rate') else rule.rate
-        rc_dc_rate = rule.rc_dc_rate if hasattr(rule, 'rc_dc_rate') else rule.rate * Decimal('0.5')
+        # Taxas base das regras de negócio
+        rctr_c_rate = rule.rctr_c_rate
+        rc_dc_rate = rule.rc_dc_rate
         
-        # Aplicar fatores de agravo/desconto baseados na rota
-        if is_high_risk_route(quote_request.origin, quote_request.destination):
-            rctr_c_rate *= Decimal('1.2')  # 20% de agravo
-            rc_dc_rate *= Decimal('1.3')   # 30% de agravo
-        
+        # Aplicar fatores de agravo/desconto baseados no nível de risco da mercadoria
+        if merchandise_type.risk_level == 'HIGH':
+            rctr_c_rate *= rule.high_risk_multiplier
+            rc_dc_rate *= rule.high_risk_multiplier
+        elif merchandise_type.risk_level == 'EXTREME':
+            rctr_c_rate *= (rule.high_risk_multiplier * Decimal('1.5')) # Exemplo de agravo maior
+            rc_dc_rate *= (rule.high_risk_multiplier * Decimal('1.5'))
+
+        # Aplicar desconto por volume, se aplicável
+        if quote_request.monthly_revenue >= rule.volume_discount_threshold and rule.volume_discount_threshold > 0:
+            rctr_c_rate *= (Decimal('1') - rule.volume_discount_rate / Decimal('100'))
+            rc_dc_rate *= (Decimal('1') - rule.volume_discount_rate / Decimal('100'))
+
         # Calcular limites oferecidos (baseado nos limites solicitados e capacidade da seguradora)
-        rctr_c_limit = min(quote_request.general_lmg, get_max_limit_for_insurer(insurer, 'RCTR-C'))
-        rc_dc_limit = min(quote_request.general_lmg, get_max_limit_for_insurer(insurer, 'RC-DC'))
+        # Usar os limites máximos da seguradora, se definidos
+        rctr_c_limit = min(quote_request.general_lmg, insurer.max_rctr_c_limit)
+        rc_dc_limit = min(quote_request.general_lmg, insurer.max_rc_dc_limit)
         
         # Calcular prêmio mensal
         monthly_premium = (quote_request.monthly_revenue * rctr_c_rate / 100) + \
                          (quote_request.monthly_revenue * rc_dc_rate / 100)
         
-        # Aplicar prêmio mínimo se necessário
-        minimum_premium = get_minimum_premium_for_insurer(insurer)
-        if monthly_premium < minimum_premium:
-            monthly_premium = minimum_premium
+        # Aplicar prêmio mínimo da seguradora
+        if monthly_premium < insurer.minimum_premium:
+            monthly_premium = insurer.minimum_premium
         
         # Criar resultado da cotação
         quote_result = QuoteResult(
@@ -68,13 +78,13 @@ def calculate_premium_for_insurer(quote_request: QuoteRequest, insurer: Insurer)
             rctr_c_limit=rctr_c_limit,
             rc_dc_limit=rc_dc_limit,
             premium_value=monthly_premium,
-            observations=get_special_conditions(insurer, quote_request)
+            observations=get_special_conditions(insurer, quote_request, rule)
         )
         
         return quote_result
         
-    except InsurerBusinessRule.DoesNotExist:
-        logger.warning(f"Regra de negócio não encontrada para {insurer.name} - {quote_request.cargo_type}")
+    except (InsurerBusinessRule.DoesNotExist, MerchandiseType.DoesNotExist):
+        logger.warning(f"Regra de negócio ou tipo de mercadoria não encontrado para {insurer.name} - {quote_request.cargo_type}")
         return None
     except Exception as e:
         logger.error(f"Erro no cálculo para {insurer.name}: {e}")
@@ -82,9 +92,9 @@ def calculate_premium_for_insurer(quote_request: QuoteRequest, insurer: Insurer)
 
 def is_high_risk_route(origin: str, destination: str) -> bool:
     """
-    Verifica se a rota é considerada de alto risco
+    Verifica se a rota é considerada de alto risco (exemplo simplificado)
     """
-    high_risk_cities = ['Rio de Janeiro', 'RJ', 'São Paulo', 'SP']
+    high_risk_cities = RiskCity.objects.filter(is_active=True).values_list('name', flat=True)
     
     for city in high_risk_cities:
         if city.lower() in origin.lower() or city.lower() in destination.lower():
@@ -92,45 +102,35 @@ def is_high_risk_route(origin: str, destination: str) -> bool:
     
     return False
 
-def get_max_limit_for_insurer(insurer: Insurer, coverage_type: str) -> Decimal:
+def get_special_conditions(insurer: Insurer, quote_request: QuoteRequest, rule: InsurerBusinessRule) -> str:
     """
-    Retorna o limite máximo que a seguradora oferece para o tipo de cobertura
-    """
-    # Valores padrão - em um sistema real, isso viria do banco de dados
-    limits = {
-        'Shamah': {'RCTR-C': Decimal('500000'), 'RC-DC': Decimal('300000')},
-        'Tokio': {'RCTR-C': Decimal('1000000'), 'RC-DC': Decimal('500000')},
-    }
-    
-    return limits.get(insurer.name, {}).get(coverage_type, Decimal('200000'))
-
-def get_minimum_premium_for_insurer(insurer: Insurer) -> Decimal:
-    """
-    Retorna o prêmio mínimo da seguradora
-    """
-    # Valores padrão - em um sistema real, isso viria do banco de dados
-    minimums = {
-        'Shamah': Decimal('150.00'),
-        'Tokio': Decimal('200.00'),
-    }
-    
-    return minimums.get(insurer.name, Decimal('100.00'))
-
-def get_special_conditions(insurer: Insurer, quote_request: QuoteRequest) -> str:
-    """
-    Retorna condições especiais baseadas na seguradora e características da operação
+    Retorna condições especiais baseadas na seguradora, características da operação e regras de negócio.
     """
     conditions = []
     
-    if insurer.name == 'Shamah':
-        conditions.append("Cobertura 24h para emergências")
-        conditions.append("Desconto de 5% para renovação")
-    
+    if rule.observations:
+        conditions.append(rule.observations)
+
     if is_high_risk_route(quote_request.origin, quote_request.destination):
-        conditions.append("Operação de alto risco - franquia diferenciada")
-    
-    if quote_request.monthly_revenue > Decimal('1000000'):
-        conditions.append("Cliente premium - condições especiais disponíveis")
+        try:
+            high_risk_condition = SpecialCondition.objects.get(code='HIGH_RISK_OPERATION', is_active=True)
+            conditions.append(high_risk_condition.description)
+        except SpecialCondition.DoesNotExist:
+            logger.warning("Condição especial 'HIGH_RISK_OPERATION' não encontrada ou inativa.")
+
+    try:
+        premium_client_threshold = Decimal(SystemParameter.objects.get(key='PREMIUM_CLIENT_MONTHLY_REVENUE_THRESHOLD').value)
+        if quote_request.monthly_revenue > premium_client_threshold:
+            try:
+                premium_client_condition = SpecialCondition.objects.get(code='PREMIUM_CLIENT_SPECIAL_CONDITIONS', is_active=True)
+                conditions.append(premium_client_condition.description)
+            except SpecialCondition.DoesNotExist:
+                logger.warning("Condição especial 'PREMIUM_CLIENT_SPECIAL_CONDITIONS' não encontrada ou inativa.")
+    except SystemParameter.DoesNotExist:
+        logger.warning("Parâmetro de sistema 'PREMIUM_CLIENT_MONTHLY_REVENUE_THRESHOLD' não encontrado.")
+    except Exception as e:
+        logger.error(f"Erro ao obter ou converter parâmetro 'PREMIUM_CLIENT_MONTHLY_REVENUE_THRESHOLD': {e}")
     
     return "; ".join(conditions)
+
 

@@ -5,12 +5,12 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { 
-  FileText, 
-  Download, 
-  Eye, 
-  CheckCircle, 
-  Clock, 
+import {
+  FileText,
+  Download,
+  Eye,
+  CheckCircle,
+  Clock,
   AlertCircle,
   Building,
   Shield,
@@ -20,14 +20,17 @@ import {
   Calendar,
   Star,
   TrendingUp,
-  Award
+  Award,
+  XCircle // Ícone corrigido
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const ProposalPage = () => {
   const { authToken, hasRole } = useAuth();
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   const fetchProposals = async () => {
     try {
@@ -42,45 +45,7 @@ const ProposalPage = () => {
       const data = await response.json();
       setProposals(data);
     } catch (error) {
-      // Simulando dados para demonstração se a API não estiver disponível
-      const mockProposals = [
-        {
-          id: 1,
-          client_name: 'Transportes ABC Ltda',
-          status: 'COMPLETED',
-          valid_until: '2024-09-28',
-          quote_result_details: { premium_value: 2500.00 },
-          insurer: 'Shamah Seguros',
-          cargo_type: 'Eletrônicos',
-          origin: 'São Paulo, SP',
-          destination: 'Rio de Janeiro, RJ',
-          monthly_revenue: 1000000,
-          rctr_c_rate: 0.0250,
-          rc_dc_rate: 0.0150,
-          rctr_c_limit: 500000,
-          rc_dc_limit: 300000,
-          observations: 'Cobertura 24h para emergências; Desconto de 5% para renovação'
-        },
-        {
-          id: 2,
-          client_name: 'Logística XYZ S.A.',
-          status: 'PENDING',
-          valid_until: '2024-09-27',
-          quote_result_details: { premium_value: 3200.00 },
-          insurer: 'Tokio Marine',
-          cargo_type: 'Alimentos',
-          origin: 'Campinas, SP',
-          destination: 'Belo Horizonte, MG',
-          monthly_revenue: 1500000,
-          rctr_c_rate: 0.0280,
-          rc_dc_rate: 0.0180,
-          rctr_c_limit: 1000000,
-          rc_dc_limit: 500000,
-          observations: 'Cliente premium - condições especiais disponíveis'
-        }
-      ];
-      setProposals(mockProposals);
-      setError(null);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -132,6 +97,51 @@ const ProposalPage = () => {
       alert('Proposta aprovada com sucesso!');
     } catch (error) {
       alert(`Erro ao aprovar a proposta: ${error.message}`);
+    }
+  };
+
+  const handleRejectProposal = async (proposalId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/quotes/proposals/${proposalId}/reject/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken.access}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorData.status || 'Unknown error'}`);
+      }
+      // Atualiza o status localmente
+      setProposals(proposals.map(p => p.id === proposalId ? { ...p, status: 'REJECTED' } : p));
+      alert('Proposta rejeitada com sucesso!');
+    } catch (error) {
+      alert(`Erro ao rejeitar a proposta: ${error.message}`);
+    }
+  };
+
+  const handleDownloadPdf = async (proposalId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/quotes/proposals/${proposalId}/download_pdf/`, {
+        headers: {
+          'Authorization': `Bearer ${authToken.access}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proposta_${proposalId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(`Erro ao baixar PDF: ${error.message}`);
     }
   };
 
@@ -208,11 +218,11 @@ const ProposalPage = () => {
                     <div>
                       <CardTitle className="text-xl flex items-center">
                         <Building className="h-6 w-6 mr-2 text-blue-600" />
-                        {proposal.client_name}
+                        {proposal.quote_request?.client_name || `Proposta #${proposal.id}`}
                       </CardTitle>
                       <CardDescription className="flex items-center mt-2">
                         <Shield className="h-4 w-4 mr-2" />
-                        {proposal.insurer || 'Seguradora não informada'}
+                        {proposal.insurer_name || 'Seguradora não informada'}
                       </CardDescription>
                     </div>
                     <div className="text-right">
@@ -239,8 +249,8 @@ const ProposalPage = () => {
                             <DollarSign className="h-5 w-5 text-green-600" />
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Prêmio Mensal</p>
-                            <p className="font-semibold">R$ {proposal.quote_result_details?.premium_value?.toLocaleString('pt-BR') || 'N/A'}</p>
+                            <p className="text-sm text-gray-500">Prêmio Total</p>
+                            <p className="font-semibold">R$ {parseFloat(proposal.total_premium).toLocaleString('pt-BR') || 'N/A'}</p>
                           </div>
                         </div>
                         
@@ -250,7 +260,7 @@ const ProposalPage = () => {
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Tipo de Carga</p>
-                            <p className="font-semibold">{proposal.cargo_type || 'N/A'}</p>
+                            <p className="font-semibold">{proposal.quote_request?.cargo_type || 'N/A'}</p>
                           </div>
                         </div>
                         
@@ -260,7 +270,7 @@ const ProposalPage = () => {
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Rota</p>
-                            <p className="font-semibold text-sm">{proposal.origin && proposal.destination ? `${proposal.origin} → ${proposal.destination}` : 'N/A'}</p>
+                            <p className="font-semibold text-sm">{proposal.quote_request?.origin && proposal.quote_request?.destination ? `${proposal.quote_request.origin} → ${proposal.quote_request.destination}` : 'N/A'}</p>
                           </div>
                         </div>
                         
@@ -269,13 +279,13 @@ const ProposalPage = () => {
                             <Calendar className="h-5 w-5 text-orange-600" />
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Válida até</p>
-                            <p className="font-semibold">{new Date(proposal.valid_until).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-sm text-gray-500">Data da Proposta</p>
+                            <p className="font-semibold">{new Date(proposal.proposal_date).toLocaleDateString('pt-BR')}</p>
                           </div>
                         </div>
                       </div>
 
-                      {proposal.monthly_revenue && (
+                      {proposal.quote_request?.monthly_revenue && (
                         <>
                           <Separator />
                           <div>
@@ -284,7 +294,7 @@ const ProposalPage = () => {
                               Faturamento Mensal
                             </h4>
                             <p className="text-lg font-bold text-green-600">
-                              R$ {proposal.monthly_revenue.toLocaleString('pt-BR')}
+                              R$ {parseFloat(proposal.quote_request.monthly_revenue).toLocaleString('pt-BR')}
                             </p>
                           </div>
                         </>
@@ -319,7 +329,7 @@ const ProposalPage = () => {
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-sm text-gray-600">Limite:</span>
-                                  <span className="font-semibold">R$ {proposal.rctr_c_limit?.toLocaleString('pt-BR') || 'N/A'}</span>
+                                  <span className="font-semibold">R$ {parseFloat(proposal.general_lmg).toLocaleString('pt-BR') || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-sm text-gray-600">Franquia:</span>
@@ -342,7 +352,7 @@ const ProposalPage = () => {
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-sm text-gray-600">Limite:</span>
-                                  <span className="font-semibold">R$ {proposal.rc_dc_limit?.toLocaleString('pt-BR') || 'N/A'}</span>
+                                  <span className="font-semibold">R$ {parseFloat(proposal.rc_dc_limit).toLocaleString('pt-BR') || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-sm text-gray-600">Franquia:</span>
@@ -360,16 +370,27 @@ const ProposalPage = () => {
 
                       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
                         <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-semibold text-blue-800">Prêmio Total Mensal</h4>
-                              <p className="text-sm text-blue-600">Valor a ser pago mensalmente</p>
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <DollarSign className="h-5 w-5 text-blue-600" />
                             </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-bold text-blue-800">
-                                R$ {proposal.quote_result_details?.premium_value?.toLocaleString('pt-BR') || 'N/A'}
-                              </p>
-                              <p className="text-sm text-blue-600">por mês</p>
+                            <div>
+                              <p className="text-sm text-gray-500">LMG Container</p>
+                              <p className="font-semibold">R$ {parseFloat(proposal.container_lmg).toLocaleString('pt-BR') || 'N/A'}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                              <DollarSign className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">LMG Operação RJ</p>
+                              <p className="font-semibold">R$ {parseFloat(proposal.rj_operation_lmg).toLocaleString('pt-BR') || 'N/A'}</p>
                             </div>
                           </div>
                         </CardContent>
@@ -377,85 +398,27 @@ const ProposalPage = () => {
                     </TabsContent>
 
                     <TabsContent value="actions" className="space-y-4 mt-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex flex-col space-y-2">
                         {proposal.status === 'PENDING' && hasRole(['Manager']) && (
-                          <Button 
-                            onClick={() => handleApproveProposal(proposal.id)}
-                            className="bg-green-600 hover:bg-green-700 flex items-center justify-center"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Aprovar Proposta
+                          <div className="flex space-x-2">
+                            <Button onClick={() => handleApproveProposal(proposal.id)} className="bg-green-500 hover:bg-green-600">
+                              <CheckCircle className="h-4 w-4 mr-2" /> Aprovar Proposta
+                            </Button>
+                            <Button onClick={() => handleRejectProposal(proposal.id)} className="bg-red-500 hover:bg-red-600">
+                              <XCircle className="h-4 w-4 mr-2" /> Rejeitar Proposta
+                            </Button>
+                          </div>
+                        )}
+                        {proposal.pdf_file && (
+                          <Button onClick={() => handleDownloadPdf(proposal.id)} className="bg-blue-500 hover:bg-blue-600">
+                            <Download className="h-4 w-4 mr-2" /> Baixar PDF
                           </Button>
                         )}
-                        
-                        {proposal.status !== 'COMPLETED' && (
-                          <Button 
-                            onClick={() => handleGeneratePdf(proposal.id)}
-                            disabled={proposal.status === 'PROCESSING'}
-                            className="flex items-center justify-center"
-                          >
-                            <FileText className="h-4 w-4 mr-2" />
-                            {proposal.status === 'PROCESSING' ? 'Gerando PDF...' : 'Gerar PDF'}
+                        {!proposal.pdf_file && proposal.status === 'COMPLETED' && hasRole(['Broker', 'Manager']) && (
+                          <Button onClick={() => handleGeneratePdf(proposal.id)} className="bg-purple-500 hover:bg-purple-600">
+                            <FileText className="h-4 w-4 mr-2" /> Gerar PDF da Proposta
                           </Button>
                         )}
-                        
-                        {proposal.status === 'COMPLETED' && (
-                          <Button 
-                            asChild
-                            className="bg-purple-600 hover:bg-purple-700 flex items-center justify-center"
-                          >
-                            <a
-                              href={`/path/to/generated/pdf/${proposal.id}.pdf`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              Download PDF
-                            </a>
-                          </Button>
-                        )}
-                        
-                        <Button 
-                          variant="outline"
-                          className="flex items-center justify-center"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Visualizar Detalhes
-                        </Button>
-                        
-                        <Button 
-                          variant="outline"
-                          className="flex items-center justify-center"
-                        >
-                          <Star className="h-4 w-4 mr-2" />
-                          Comparar Propostas
-                        </Button>
-                      </div>
-
-                      <Separator />
-
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-semibold mb-2">Informações da Proposta</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-gray-600">Válida até:</span>
-                            <span className="ml-2 font-medium">
-                              {new Date(proposal.valid_until).toLocaleDateString('pt-BR')}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Status:</span>
-                            <span className="ml-2">{getStatusBadge(proposal.status)}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Seguradora:</span>
-                            <span className="ml-2 font-medium">{proposal.insurer || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-600">Prêmio:</span>
-                            <span className="ml-2 font-medium">R$ {proposal.quote_result_details?.premium_value?.toLocaleString('pt-BR') || 'N/A'}</span>
-                          </div>
-                        </div>
                       </div>
                     </TabsContent>
                   </Tabs>
@@ -470,5 +433,3 @@ const ProposalPage = () => {
 };
 
 export default ProposalPage;
-
-

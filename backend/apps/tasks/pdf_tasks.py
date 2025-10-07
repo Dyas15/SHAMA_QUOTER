@@ -1,6 +1,4 @@
-
 from celery import shared_task
-from apps.quotes.models import Proposal
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -16,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def generate_pdf_task(proposal_id):
+    # Importar o modelo aqui dentro da função, para garantir que o registro de apps já esteja carregado.
+    from apps.quotes.models import Proposal
     try:
         proposal = Proposal.objects.get(id=proposal_id)
         logger.info(f"Generating PDF for Proposal ID: {proposal_id}")
@@ -37,6 +37,11 @@ def generate_pdf_task(proposal_id):
         proposal.save()
         
         logger.info(f"PDF generated successfully for Proposal ID {proposal_id}: {pdf_path}")
+
+        # Enviar e-mail com o PDF anexado
+        from apps.tasks.email_tasks import send_approval_email_task
+        send_approval_email_task.delay(proposal_id, pdf_path)
+
         return pdf_path
 
     except Proposal.DoesNotExist:
@@ -114,10 +119,10 @@ def generate_proposal_pdf(proposal, pdf_path):
     
     cargo_data = [
         ['Tipo de Mercadoria:', proposal.quote_request.cargo_type or 'N/A'],
-        ['Valor Médio por Embarque:', f"R$ {proposal.quote_request.cargo_value:,.2f}" if proposal.quote_request.cargo_value else 'N/A'],
+        ['Valor Médio por Embarque:', f"R$ {float(proposal.quote_request.cargo_value):,.2f}" if proposal.quote_request.cargo_value else 'N/A'],
         ['Origem:', proposal.quote_request.origin or 'N/A'],
         ['Destino:', proposal.quote_request.destination or 'N/A'],
-        ['Faturamento Mensal:', f"R$ {proposal.quote_request.monthly_revenue:,.2f}" if proposal.quote_request.monthly_revenue else 'N/A']
+        ['Faturamento Mensal:', f"R$ {float(proposal.quote_request.monthly_revenue):,.2f}" if proposal.quote_request.monthly_revenue else 'N/A']
     ]
     
     cargo_table = Table(cargo_data, colWidths=[2*inch, 4*inch])
@@ -140,8 +145,8 @@ def generate_proposal_pdf(proposal, pdf_path):
     
     coverage_data = [
         ['Cobertura', 'Limite Máximo de Garantia (LMG)', 'Taxa'],
-        ['RCTR-C', f"R$ {proposal.rctr_c_limit:,.2f}" if proposal.rctr_c_limit else 'N/A', f"{proposal.rctr_c_rate:.4f}%" if proposal.rctr_c_rate else 'N/A'],
-        ['RC-DC', f"R$ {proposal.rc_dc_limit:,.2f}" if proposal.rc_dc_limit else 'N/A', f"{proposal.rc_dc_rate:.4f}%" if proposal.rc_dc_rate else 'N/A']
+        ['RCTR-C', f"R$ {float(proposal.rctr_c_limit):,.2f}" if proposal.rctr_c_limit else 'N/A', f"{proposal.rctr_c_rate:.4f}%" if proposal.rctr_c_rate else 'N/A'],
+        ['RC-DC', f"R$ {float(proposal.rc_dc_limit):,.2f}" if proposal.rc_dc_limit else 'N/A', f"{proposal.rc_dc_rate:.4f}%" if proposal.rc_dc_rate else 'N/A']
     ]
     
     coverage_table = Table(coverage_data, colWidths=[2*inch, 2*inch, 2*inch])
@@ -189,7 +194,7 @@ def generate_proposal_pdf(proposal, pdf_path):
     story.append(Paragraph("PRÊMIO DO SEGURO", subtitle_style))
     
     premium_data = [
-        ['Prêmio Total Mensal:', f"R$ {proposal.total_premium:,.2f}" if proposal.total_premium else 'N/A'],
+        ['Prêmio Total Mensal:', f"R$ {float(proposal.total_premium):,.2f}" if proposal.total_premium else 'N/A'],
         ['Forma de Pagamento:', 'Mensal'],
         ['Vigência:', '12 meses']
     ]

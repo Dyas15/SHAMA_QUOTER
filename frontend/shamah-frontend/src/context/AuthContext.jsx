@@ -11,7 +11,11 @@ export const AuthProvider = ({ children }) => {
     if (authToken) {
       try {
         const decodedToken = jwtDecode(authToken.access);
-        setUser(decodedToken);
+        // Assumindo que as roles vêm no token JWT sob a chave 'roles' ou 'groups'
+        // Se o Django Simple JWT não incluir roles por padrão, precisaremos estender o serializer.
+        // Por enquanto, vamos assumir que existe um campo 'groups' ou 'roles' no payload.
+        const userRoles = decodedToken.groups || decodedToken.roles || [];
+        setUser({ ...decodedToken, roles: userRoles });
       } catch (error) {
         console.error("Invalid token", error);
         setAuthToken(null);
@@ -36,7 +40,8 @@ export const AuthProvider = ({ children }) => {
       setAuthToken(data);
       localStorage.setItem('authToken', JSON.stringify(data));
       const decodedToken = jwtDecode(data.access);
-      setUser(decodedToken);
+      const userRoles = decodedToken.groups || decodedToken.roles || [];
+      setUser({ ...decodedToken, roles: userRoles });
       return true;
     } else {
       console.error('Login failed', data);
@@ -63,6 +68,7 @@ export const AuthProvider = ({ children }) => {
 
   const hasRole = (roles) => {
     if (!user || !user.roles) return false;
+    // Verifica se o usuário possui QUALQUER uma das roles fornecidas
     return roles.some(role => user.roles.includes(role));
   };
 
@@ -74,3 +80,5 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
+

@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
-import { 
-  BarChart3, 
-  FileText, 
-  Users, 
-  TrendingUp, 
-  Calculator, 
-  Shield, 
-  Settings, 
+import {
+  BarChart3,
+  FileText,
+  Users,
+  TrendingUp,
+  Calculator,
+  Shield,
+  Settings,
   LogOut,
   Bell,
   Search,
@@ -25,6 +25,7 @@ import {
 
 const DashboardPage = () => {
   const { user, logout, hasRole, authToken } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalQuotes: 0,
     pendingProposals: 0,
@@ -34,21 +35,57 @@ const DashboardPage = () => {
   const [recentActivity, setRecentActivity] = useState([]);
 
   useEffect(() => {
-    // Simular carregamento de estatísticas
-    setStats({
-      totalQuotes: 24,
-      pendingProposals: 8,
-      completedProposals: 16,
-      monthlyRevenue: 125000
-    });
+    const fetchDashboardData = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/audits/dashboard-stats/', {
+          headers: {
+            'Authorization': `Bearer ${authToken.access}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setStats(data);
+      } catch (error) {
+        console.error('Erro ao buscar dados do dashboard:', error);
+      }
+    };
 
-    // Simular atividades recentes
-    setRecentActivity([
-      { id: 1, type: 'quote', description: 'Nova cotação para Transportes ABC', time: '2 horas atrás' },
-      { id: 2, type: 'proposal', description: 'Proposta aprovada para Logística XYZ', time: '4 horas atrás' },
-      { id: 3, type: 'quote', description: 'Cotação atualizada para Cargas Ltda', time: '1 dia atrás' },
-    ]);
-  }, []);
+    const fetchRecentActivity = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/audits/recent-activity/', {
+          headers: {
+            'Authorization': `Bearer ${authToken.access}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setRecentActivity(data);
+      } catch (error) {
+        console.error('Erro ao buscar atividades recentes:', error);
+      }
+    };
+
+    if (authToken) {
+        fetchDashboardData();
+        fetchRecentActivity();
+    }
+  }, [authToken]);
+
+  const handleNotificationClick = () => {
+    alert('Funcionalidade de Notificações em desenvolvimento!');
+  };
+
+  const handleSearchClick = () => {
+    alert('Funcionalidade de Busca em desenvolvimento!');
+  };
+
+  const handleViewAllActivities = () => {
+    navigate('/admin/activities'); // Navega para uma nova rota para todas as atividades
+  };
 
   const quickActions = [
     {
@@ -127,11 +164,11 @@ const DashboardPage = () => {
               <p className="text-gray-600">Bem-vindo de volta, {user?.username}!</p>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleNotificationClick}>
                 <Bell className="h-4 w-4 mr-2" />
                 Notificações
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleSearchClick}>
                 <Search className="h-4 w-4 mr-2" />
                 Buscar
               </Button>
@@ -258,14 +295,14 @@ const DashboardPage = () => {
               <CardContent className="p-6">
                 <div className="space-y-4">
                   {recentActivity.map((activity, index) => (
-                    <div key={activity.id}>
+                    <div key={`${activity.action_type}-${activity.id}`}>
                       <div className="flex items-start space-x-3">
                         <div className={`p-2 rounded-full ${
-                          activity.type === 'quote' ? 'bg-blue-100' : 'bg-green-100'
+                          activity.action_type === 'QUOTE_REQUEST' ? 'bg-blue-100' : 'bg-green-100'
                         }`}>
-                          {activity.type === 'quote' ? (
+                          {activity.action_type === 'QUOTE_REQUEST' ? (
                             <Calculator className={`h-4 w-4 ${
-                              activity.type === 'quote' ? 'text-blue-600' : 'text-green-600'
+                              activity.action_type === 'QUOTE_REQUEST' ? 'text-blue-600' : 'text-green-600'
                             }`} />
                           ) : (
                             <FileText className="h-4 w-4 text-green-600" />
@@ -273,9 +310,9 @@ const DashboardPage = () => {
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">
-                            {activity.description}
+                            {activity.details}
                           </p>
-                          <p className="text-xs text-gray-500">{activity.time}</p>
+                          <p className="text-xs text-gray-500">{new Date(activity.timestamp).toLocaleString('pt-BR')}</p>
                         </div>
                       </div>
                       {index < recentActivity.length - 1 && <Separator className="mt-4" />}
@@ -283,7 +320,7 @@ const DashboardPage = () => {
                   ))}
                 </div>
                 <Separator className="my-4" />
-                <Button variant="outline" className="w-full">
+                <Button variant="outline" className="w-full" onClick={handleViewAllActivities}>
                   Ver Todas as Atividades
                 </Button>
               </CardContent>
@@ -296,4 +333,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-
