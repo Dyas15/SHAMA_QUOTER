@@ -1,139 +1,30 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+
+// Importações dos componentes de UI
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Badge } from '../components/ui/badge';
+import { Separator } from '../components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { PlusCircle, FileText, Calculator, Truck, MapPin, DollarSign, Calendar, User, Building } from 'lucide-react';
-
-// --- Início dos Componentes de UI e Contexto de Autenticação ---
-// Para resolver os erros de importação, os componentes de UI e o contexto de autenticação
-// foram recriados aqui de forma simplificada.
-
-// Contexto de Autenticação
-const AuthContext = createContext();
-const useAuth = () => useContext(AuthContext);
-const AuthProvider = ({ children }) => {
-  const auth = { authToken: { access: 'mock-token-for-development' } };
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
-};
-
-// Componentes de UI (estilizados com Tailwind CSS)
-const Card = ({ className = '', children }) => <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>{children}</div>;
-const CardHeader = ({ className = '', children }) => <div className={`p-6 border-b border-gray-200 ${className}`}>{children}</div>;
-const CardTitle = ({ className = '', children }) => <h3 className={`text-xl font-semibold leading-none tracking-tight ${className}`}>{children}</h3>;
-const CardDescription = ({ className = '', children }) => <p className={`text-sm text-gray-500 ${className}`}>{children}</p>;
-const CardContent = ({ className = '', children }) => <div className={`p-6 ${className}`}>{children}</div>;
-
-const Button = ({ className = '', variant, size, ...props }) => {
-  const baseStyles = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none";
-  const variantStyles = {
-    default: "bg-blue-600 text-white hover:bg-blue-700",
-    outline: "border border-gray-300 bg-transparent hover:bg-gray-100",
-  };
-  const sizeStyles = {
-    default: "h-10 py-2 px-4",
-    sm: "h-9 px-3 rounded-md",
-  };
-  const styles = `${baseStyles} ${variantStyles[variant] || variantStyles.default} ${sizeStyles[size] || sizeStyles.default} ${className}`;
-  return <button className={styles} {...props} />;
-};
-
-const Input = ({ className = '', ...props }) => (
-  <input className={`flex h-10 w-full rounded-md border border-gray-300 bg-transparent py-2 px-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} {...props} />
-);
-
-const Label = ({ className = '', ...props }) => (
-  <label className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 mb-2 block ${className}`} {...props} />
-);
-
-const Textarea = ({ className = '', ...props }) => (
-  <textarea className={`flex min-h-[80px] w-full rounded-md border border-gray-300 bg-transparent py-2 px-3 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} {...props} />
-);
-
-const Separator = ({ className = '' }) => <hr className={`border-gray-200 ${className}`} />;
-
-// Componentes de Select
-const SelectContext = createContext();
-const Select = ({ children, onValueChange, value }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedValue, setSelectedValue] = useState(value);
-
-    const handleSelect = (val) => {
-        setSelectedValue(val);
-        if (onValueChange) onValueChange(val);
-        setIsOpen(false);
-    };
-
-    useEffect(() => {
-        setSelectedValue(value);
-    }, [value]);
-
-    return (
-        <SelectContext.Provider value={{ isOpen, setIsOpen, selectedValue, handleSelect }}>
-            <div className="relative">{children}</div>
-        </SelectContext.Provider>
-    );
-};
-const SelectTrigger = ({ children, className = '' }) => {
-    const { setIsOpen, isOpen } = useContext(SelectContext);
-    return (
-        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white py-2 px-3 text-sm ${className}`}>
-            {children}
-        </button>
-    );
-};
-const SelectValue = ({ placeholder }) => {
-    const { selectedValue } = useContext(SelectContext);
-    return <span>{selectedValue || placeholder}</span>;
-};
-const SelectContent = ({ children, className = '' }) => {
-    const { isOpen } = useContext(SelectContext);
-    if (!isOpen) return null;
-    return <div className={`absolute z-10 mt-1 w-full rounded-md border bg-white shadow-lg ${className}`}>{children}</div>;
-};
-const SelectItem = ({ value, children, className = '' }) => {
-    const { handleSelect } = useContext(SelectContext);
-    return <div onClick={() => handleSelect(value)} className={`cursor-pointer p-2 text-sm hover:bg-gray-100 ${className}`}>{children}</div>;
-};
-
-
-const Badge = ({ className = '', variant, ...props }) => (
-    <div className={`inline-flex items-center border rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${variant === 'secondary' ? 'bg-gray-100 text-gray-800' : 'bg-blue-100 text-blue-800'} ${className}`} {...props} />
-);
-
-// Componentes de Tabs
-const TabsContext = createContext();
-const Tabs = ({ defaultValue, children, className = '' }) => {
-    const [activeTab, setActiveTab] = useState(defaultValue);
-    return (
-        <TabsContext.Provider value={{ activeTab, setActiveTab }}>
-            <div className={className}>{children}</div>
-        </TabsContext.Provider>
-    );
-};
-const TabsList = ({ children, className = '' }) => <div className={`inline-flex h-10 items-center justify-center rounded-md bg-gray-100 p-1 text-gray-500 ${className}`}>{children}</div>;
-const TabsTrigger = ({ value, children, className = '' }) => {
-    const { activeTab, setActiveTab } = useContext(TabsContext);
-    const isActive = activeTab === value;
-    return (
-        <button onClick={() => setActiveTab(value)} className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-white transition-all ${isActive ? 'bg-white text-gray-900 shadow-sm' : ''} ${className}`}>
-            {children}
-        </button>
-    );
-};
-const TabsContent = ({ value, children, className = '' }) => {
-    const { activeTab } = useContext(TabsContext);
-    return activeTab === value ? <div className={`mt-2 ${className}`}>{children}</div> : null;
-};
-// --- Fim dos Componentes de UI e Contexto de Autenticação ---
-
 
 const QuoteRequestPage = () => {
   const { authToken } = useAuth();
+  const navigate = useNavigate();
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   
-  // A dependência 'useNavigate' foi removida e a função foi simplificada
   const handleViewDetails = (id) => {
-    alert(`A navegar para os detalhes da proposta #${id}`);
+    // Navega para uma página de detalhes da proposta (exemplo)
+    navigate(`/proposals/${id}`);
   };
 
   const [formData, setFormData] = useState({
@@ -238,8 +129,8 @@ const QuoteRequestPage = () => {
       }
       const data = await response.json();
       setQuoteRequests(data);
-    } catch (error) { // CORREÇÃO: Removido '=>'
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -272,20 +163,7 @@ const QuoteRequestPage = () => {
         return;
       }
     }
-
-    const numericFields = ["cargo_value", "monthly_revenue", "general_lmg"];
-    for (const field of numericFields) {
-      if (isNaN(parseFloat(formData[field])) || parseFloat(formData[field]) <= 0) {
-        const labels = {
-          cargo_value: "Valor da Carga",
-          monthly_revenue: "Faturação Mensal",
-          general_lmg: "LMG Geral",
-        };
-        alert(`Erro: O campo '${labels[field]}' deve ser um número maior que zero.`);
-        return;
-      }
-    }
-
+    
     try {
       const response = await fetch(
         "http://localhost:8000/api/v1/quotes/requests/",
@@ -311,14 +189,8 @@ const QuoteRequestPage = () => {
         alert("Solicitação de cotação criada com sucesso!");
       } else {
         const errorData = await response.json();
-        console.error("Erro ao solicitar cotação:", errorData);
-
-        if (errorData && typeof errorData === "object") {
-          const errorMessages = Object.values(errorData).flat();
-          alert(`Erro: ${errorMessages.join(", ")}`);
-        } else {
-          alert(errorData.detail || "Erro desconhecido ao solicitar cotação.");
-        }
+        const errorMessages = Object.values(errorData).flat();
+        alert(`Erro: ${errorMessages.join(", ")}`);
       }
     } catch (error) {
       alert(`Erro de rede: ${error.message}`);
@@ -356,35 +228,25 @@ const QuoteRequestPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">A carregar solicitações de cotação...</p>
-        </div>
+      <div className="flex items-center justify-center h-screen">
+        <p>A carregar solicitações...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="text-center text-red-500">
-              <FileText className="h-12 w-12 mx-auto mb-4" />
-              <p>Erro: {error}</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center h-screen text-red-500">
+        <p>Erro: {error}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 font-sans">
+    <div className="min-h-screen bg-gray-50 font-sans">
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">
             Sistema de Cotações
           </h1>
           <p className="text-gray-600">
@@ -395,7 +257,7 @@ const QuoteRequestPage = () => {
         <div className="flex justify-center mb-8">
           <Button
             onClick={() => setShowForm(!showForm)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-md"
           >
             <PlusCircle className="h-5 w-5 mr-2" />
             Nova Solicitação de Cotação
@@ -403,13 +265,13 @@ const QuoteRequestPage = () => {
         </div>
 
         {showForm && (
-          <Card className="mb-8 shadow-xl border-0 max-w-4xl mx-auto">
-            <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
+          <Card className="mb-8 shadow-lg max-w-4xl mx-auto">
+            <CardHeader className="bg-gray-100">
               <CardTitle className="flex items-center">
                 <Calculator className="h-6 w-6 mr-2" />
                 Nova Solicitação de Cotação
               </CardTitle>
-              <CardDescription className="text-blue-100">
+              <CardDescription>
                 Preencha os dados para solicitar uma cotação de seguro de carga
               </CardDescription>
             </CardHeader>
@@ -509,14 +371,14 @@ const QuoteRequestPage = () => {
         )}
 
         <div className="flex justify-center mb-8">
-            <Card className="w-full max-w-4xl shadow-xl border-0">
-                <CardHeader className="bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-t-lg">
+            <Card className="w-full max-w-4xl shadow-lg">
+                <CardHeader className="bg-gray-100">
                     <CardTitle className="flex items-center">
                         <FileText className="h-6 w-6 mr-2" />
                         Importar Itens de Cotação via CSV
                     </CardTitle>
-                    <CardDescription className="text-purple-100">
-                        Importe múltiplos itens para uma solicitação de cotação existente usando um ficheiro CSV.
+                    <CardDescription>
+                        Importe múltiplos itens para uma solicitação de cotação existente.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="p-6">
@@ -530,8 +392,8 @@ const QuoteRequestPage = () => {
                             <Input id="csvFile" type="file" accept=".csv" onChange={handleFileChange} />
                         </div>
                         <div className="flex justify-between items-center">
-                            <Button onClick={handleImportCsv} disabled={!selectedFile || !quoteRequestIdForCsv} className="bg-purple-600 hover:bg-purple-700 text-white"> Importar CSV </Button>
-                            <Button onClick={handleDownloadCsvTemplate} variant="outline" className="text-purple-600 border-purple-600 hover:bg-purple-50"> Descarregar Modelo CSV </Button>
+                            <Button onClick={handleImportCsv} disabled={!selectedFile || !quoteRequestIdForCsv}> Importar CSV </Button>
+                            <Button onClick={handleDownloadCsvTemplate} variant="outline"> Descarregar Modelo CSV </Button>
                         </div>
                     </div>
                 </CardContent>
@@ -549,25 +411,21 @@ const QuoteRequestPage = () => {
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {quoteRequests.map((request) => (
-                    <Card key={request.id} className="hover:shadow-xl transition-all duration-200 transform hover:scale-105 border-0 shadow-lg">
-                        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-lg">
+                    <Card key={request.id} className="shadow-md hover:shadow-xl transition-shadow">
+                        <CardHeader>
                             <div className="flex justify-between items-start">
-                                <CardTitle className="text-lg flex items-center">
+                                <CardTitle className="flex items-center">
                                     <Building className="h-5 w-5 mr-2 text-blue-600" />
                                     {request.client_name || `Solicitação #${request.id}`}
                                 </CardTitle>
                                 <Badge variant="secondary">{new Date(request.request_date).toLocaleDateString('pt-PT')}</Badge>
                             </div>
-                            <CardDescription className="flex items-center pt-1"><User className="h-4 w-4 mr-1" />{request.user?.username || 'Utilizador desconhecido'}</CardDescription>
+                            <CardDescription className="pt-1">{request.user?.username || 'Utilizador desconhecido'}</CardDescription>
                         </CardHeader>
-                        <CardContent className="p-6 space-y-3">
-                            <div className="flex items-center text-sm"><Truck className="h-4 w-4 mr-2 text-gray-500" /> <span className="font-medium">Carga:</span><span className="ml-1">{request.cargo_type}</span></div>
-                            <div className="flex items-center text-sm"><DollarSign className="h-4 w-4 mr-2 text-green-500" /> <span className="font-medium">Valor:</span><span className="ml-1">€ {parseFloat(request.cargo_value).toLocaleString('pt-PT')}</span></div>
-                            <div className="flex items-center text-sm"><MapPin className="h-4 w-4 mr-2 text-red-500" /> <span className="font-medium">Rota:</span><span className="ml-1 truncate">{request.origin} → {request.destination}</span></div>
-                            {request.monthly_revenue && (<div className="flex items-center text-sm"><Calendar className="h-4 w-4 mr-2 text-gray-500" /> <span className="font-medium">Faturação Mensal:</span><span className="ml-1">€ {parseFloat(request.monthly_revenue).toLocaleString('pt-PT')}</span></div>)}
-                            <div className="flex items-center text-sm"><DollarSign className="h-4 w-4 mr-2 text-blue-500" /> <span className="font-medium">LMG Geral:</span><span className="ml-1">€ {parseFloat(request.general_lmg).toLocaleString('pt-PT')}</span></div>
-                            {request.container_lmg && parseFloat(request.container_lmg) > 0 && (<div className="flex items-center text-sm"><DollarSign className="h-4 w-4 mr-2 text-blue-500" /> <span className="font-medium">LMG Contentor:</span><span className="ml-1">€ {parseFloat(request.container_lmg).toLocaleString('pt-PT')}</span></div>)}
-                            {request.rj_operation_lmg && parseFloat(request.rj_operation_lmg) > 0 && (<div className="flex items-center text-sm"><DollarSign className="h-4 w-4 mr-2 text-blue-500" /> <span className="font-medium">LMG Op. Especial:</span><span className="ml-1">€ {parseFloat(request.rj_operation_lmg).toLocaleString('pt-PT')}</span></div>)}
+                        <CardContent className="space-y-3">
+                            <p className="flex items-center text-sm"><Truck className="h-4 w-4 mr-2" /> <strong>Carga:</strong> {request.cargo_type}</p>
+                            <p className="flex items-center text-sm"><DollarSign className="h-4 w-4 mr-2" /> <strong>Valor:</strong> € {parseFloat(request.cargo_value).toLocaleString('pt-PT')}</p>
+                            <p className="flex items-center text-sm"><MapPin className="h-4 w-4 mr-2" /> <strong>Rota:</strong> {request.origin} → {request.destination}</p>
                         </CardContent>
                         <div className="p-6 pt-0 flex justify-end space-x-2">
                             <Button variant="outline" size="sm" onClick={() => handleViewDetails(request.id)}>Ver Detalhes</Button>
@@ -582,13 +440,4 @@ const QuoteRequestPage = () => {
   );
 };
 
-// O componente principal da aplicação que inclui o AuthProvider
-const App = () => {
-    return (
-        <AuthProvider>
-            <QuoteRequestPage />
-        </AuthProvider>
-    );
-};
-
-export default App;
+export default QuoteRequestPage;
