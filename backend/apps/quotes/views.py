@@ -176,14 +176,15 @@ class QuoteResultViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
 class ProposalViewSet(viewsets.ModelViewSet):
+    queryset = Proposal.objects.all()
+    serializer_class = ProposalSerializer
+    permission_classes = [IsAuthenticated]
+
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or user.groups.filter(name__in=['Manager', 'Admin', 'Auditor']).exists():
             return Proposal.objects.all()
         return Proposal.objects.filter(quote_request__user=user)
-
-    serializer_class = ProposalSerializer
-    permission_classes = [IsAuthenticated]
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, IsManager])
     def approve(self, request, pk=None):

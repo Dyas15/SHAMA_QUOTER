@@ -26,7 +26,6 @@ import { Separator } from "../components/ui/separator";
 
 const ProposalDetailPage = () => {
   const { id } = useParams();
-  const { proposalId } = useParams();
   const navigate = useNavigate();
   const { authToken } = useAuth();
   const [proposal, setProposal] = useState(null);
@@ -37,7 +36,7 @@ const ProposalDetailPage = () => {
     const fetchProposalDetails = async () => {
       try {
         const response = await fetch(
-          `http://localhost:8000/api/v1/proposals/${proposalId}/`,
+          `http://localhost:8000/api/v1/quotes/proposals/${id}/`,
           {
             method: "GET",
             headers: {
@@ -58,10 +57,13 @@ const ProposalDetailPage = () => {
       }
     };
 
-    if (proposalId) {
+    if (id && authToken?.access) {
       fetchProposalDetails();
+    } else if (!authToken) {
+      setLoading(false);
+      setError("Token de autenticação não encontrado");
     }
-  }, [proposalId, authToken]);
+  }, [id, authToken?.access]);
 
   const handleApproveReject = async (action) => {
     try {
